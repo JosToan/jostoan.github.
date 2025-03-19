@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Khung giờ</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .bar-label {
+            font-size: 14px;
+            text-anchor: middle;
+            fill: black;
+        }
+        .axis-label {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .chart-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <svg width="1650" height="700"></svg>
+    <script>
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(function(data) {
+            data.forEach(d => {
+                d.ThanhTien = +d["Thành tiền"];
+                d.Ngay = d["Thời gian tạo đơn"].split(" ")[0];
+                d.KhungGio = d["Thời gian tạo đơn"].split(" ")[1].slice(0, 2) + ":00 - " + d["Thời gian tạo đơn"].split(" ")[1].slice(0, 2) + ":59";
+            });
+
+            let groupedData = d3.rollups(data, v => d3.sum(v, d => d.ThanhTien), d => d.Ngay, d => d.KhungGio);
+            let hourlySales = Array.from(groupedData.flatMap(([ngay, khungGioData]) => khungGioData.map(([khungGio, doanhSo]) => ({ khungGio, doanhSo }))))
+
+            let avgSales = d3.rollup(hourlySales, v => d3.mean(v, d => d.doanhSo), d => d.khungGio);
+            let processedData = Array.from(avgSales, ([key, value]) => ({
+                khungGio: key,
+                doanhSo: value
+            })).sort((a, b) => +a.khungGio.split(":"[0]) - +b.khungGio.split(":"[0]));
+
+            const margin = { top: 30, right: 150, bottom: 100, left: 100 };
+            const width = 1650 - margin.left - margin.right;
+            const height = 700 - margin.top - margin.bottom;
+            
+            const svg = d3.select("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            const x = d3.scaleBand()
+                .domain(processedData.map(d => d.khungGio))
+                .range([0, width])
+                .padding(0.1);
+            
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.doanhSo)])
+                .nice()
+                .range([height, height/7]);
+            
+            const colorScale = d3.scaleOrdinal(d3.schemeSet3);
+            
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.khungGio))
+                .attr("y", d => y(d.doanhSo))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.doanhSo))
+                .attr("fill", (d, i) => colorScale(i));
+            
+            svg.selectAll(".bar-label")
+                .data(processedData)
+                .enter()
+                .append("text")
+                .attr("class", "bar-label")
+                .attr("x", d => x(d.khungGio) + x.bandwidth() / 2)
+                .attr("y", d => y(d.doanhSo) - 5)
+                .attr("text-anchor", "middle")
+                .text(d => `${Math.round(d.doanhSo).toLocaleString()} VND`);
+            
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x).tickFormat(d => d))
+                .selectAll("text")
+                .attr("transform", "rotate(-45)")
+                .style("text-anchor", "end");
+            
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d => `${d.toLocaleString()} VND`));
+            
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", -10)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text("Doanh số bán hàng theo Khung giờ");
+        });
+    </script>
+</body>
+</html>

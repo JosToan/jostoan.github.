@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân phối Lượt mua hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .chart-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container"></div>
+    <script>
+        const margin = { top: 30, right: 150, bottom: 100, left: 150 };
+        const width = 1500 - margin.left - margin.right;
+        const height = 700 - margin.top - margin.bottom;
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(data => {
+            const customerOrders = d3.group(data, d => d["Mã khách hàng"]);
+            const orderCounts = Array.from(customerOrders.values()).map(orders => new Set(orders.map(d => d["Mã đơn hàng"])).size);
+            const orderCountDistribution = d3.rollup(orderCounts, v => v.length, d => d);
+
+            let processedData = Array.from(orderCountDistribution, ([orderCount, customerCount]) => ({ orderCount, customerCount }));
+
+            
+            processedData.sort((a, b) => a.orderCount - b.orderCount);
+
+            const svg = d3.select("#chart-container").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const x = d3.scaleBand()
+                .domain(processedData.map(d => d.orderCount))
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.customerCount)])
+                .nice()
+                .range([height, height/7]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.orderCount))
+                .attr("y", d => y(d.customerCount))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.customerCount))
+                .attr("fill", "steelblue");
+
+            
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", -10)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text("Phân phối Lượt mua hàng");
+        });
+    </script>
+</body>
+</html>

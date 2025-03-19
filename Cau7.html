@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .bar-label {
+            font-size: 14px;
+            text-anchor: end;
+            fill: black;
+        }
+        .axis-label {
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .chart-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <svg width="1500" height="700"></svg>
+    <script>
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(function(data) {
+            let totalOrders = new Set(data.map(d => d["Mã đơn hàng"])).size;
+            
+            let groupedData = d3.rollup(
+                data, 
+                v => new Set(v.map(d => d["Mã đơn hàng"])).size, 
+                d => d["Mã nhóm hàng"] + " - " + d["Tên nhóm hàng"]
+            );
+            
+            let processedData = Array.from(groupedData, ([key, value]) => ({
+                nhomHang: key,
+                xacSuat: (value / totalOrders * 100).toFixed(2)
+            })).sort((a, b) => b.xacSuat - a.xacSuat);
+            
+            const margin = { top: 30, right: 150, bottom: 100, left: 150 };
+            const width = 1500 - margin.left - margin.right;
+            const height = 700 - margin.top - margin.bottom;
+            
+            const svg = d3.select("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+            
+            const y = d3.scaleBand()
+                .domain(processedData.map(d => d.nhomHang))
+                .range([0, height])
+                .padding(0.1);
+            
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.xacSuat)])
+                .nice()
+                .range([0, width]);
+            
+            const colorScale = d3.scaleOrdinal(d3.schemeSet3);
+            
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter()
+                .append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.nhomHang))
+                .attr("x", 0)
+                .attr("width", d => x(d.xacSuat))
+                .attr("height", y.bandwidth())
+                .attr("fill", (d, i) => colorScale(i));
+            
+            svg.selectAll(".bar-label")
+                .data(processedData)
+                .enter()
+                .append("text")
+                .attr("class", "bar-label")
+                .attr("x", d => x(d.xacSuat) + 5)
+                .attr("y", d => y(d.nhomHang) + y.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .text(d => `${d.xacSuat} %`);
+            
+            svg.append("g")
+                .call(d3.axisLeft(y));
+            
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x).tickFormat(d => `${d} %`));
+            
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", -10)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text("Xác suất bán hàng theo Nhóm hàng");
+        });
+    </script>
+</body>
+</html>

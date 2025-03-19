@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Nhóm hàng và Tháng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .chart-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+        .axis-label {
+            font-size: 16px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <svg width="1500" height="700"></svg>
+    <script>
+        const margin = { top: 30, right: 150, bottom: 100, left: 50 };
+        const width = 1500 - margin.left - margin.right;
+        const height = 700 - margin.top - margin.bottom;
+
+        const svg = d3.select("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(data => {
+            // Xử lý dữ liệu
+            const monthlyData = d3.group(data, d => d3.timeMonth(new Date(d["Thời gian tạo đơn"])));
+
+            const processedData = [];
+            monthlyData.forEach((orders, month) => {
+                const totalOrders = new Set(orders.map(d => d["Mã đơn hàng"])).size;
+                const groupedByNhomHang = d3.group(orders, d => d["Mã nhóm hàng"] + " - " + d["Tên nhóm hàng"]);
+                groupedByNhomHang.forEach((nhomHangOrders, nhomHang) => {
+                    const nhomHangOrderCount = new Set(nhomHangOrders.map(d => d["Mã đơn hàng"])).size;
+                    processedData.push({
+                        month: d3.timeFormat("%b-%Y")(month),
+                        monthKey: `T${month.getMonth() + 1 < 10 ? '0' : ''}${month.getMonth() + 1}`, 
+                        nhomHang: nhomHang,
+                        xacSuat: (nhomHangOrderCount / totalOrders * 100).toFixed(2)
+                    });
+                });
+            });
+
+            
+            const nhomHangNames = Array.from(new Set(processedData.map(d => d.nhomHang))).sort();
+
+            
+            const monthKeys = Array.from(new Set(processedData.map(d => d.monthKey))).sort(); 
+            const x = d3.scalePoint()
+                .domain(monthKeys)
+                .range([0, width*0.95]);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => +d.xacSuat)])
+                .nice()
+                .range([height, height/7]);
+
+            const color = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(nhomHangNames);
+
+            
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y).tickFormat(d => `${d} %`));
+
+            
+            nhomHangNames.forEach(nhomHang => {
+                const lineData = processedData.filter(d => d.nhomHang === nhomHang);
+                const line = d3.line()
+                    .x(d => x(d.monthKey))
+                    .y(d => y(d.xacSuat));
+
+                svg.append("path")
+                    .datum(lineData)
+                    .attr("fill", "none")
+                    .attr("stroke", color(nhomHang))
+                    .attr("stroke-width", 1.5)
+                    .attr("d", line);
+            });
+
+            
+            const legend = svg.append("g")
+                .attr("transform", `translate(${width -30 }, 20)`);
+
+            nhomHangNames.forEach((nhomHang, i) => {
+                const legendRow = legend.append("g")
+                    .attr("transform", `translate(0, ${i * 20})`);
+
+                legendRow.append("rect")
+                    .attr("width", 10)
+                    .attr("height", 10)
+                    .attr("fill", color(nhomHang));
+
+                legendRow.append("text")
+                    .attr("x", 20)
+                    .attr("y", 10)
+                    .attr("text-anchor", "start")
+                    .text(nhomHang);
+            });
+
+            
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", -10)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text("Xác suất bán hàng theo Nhóm hàng và Tháng");
+        });
+    </script>
+</body>
+</html>

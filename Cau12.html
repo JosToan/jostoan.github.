@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phân phối Mức chi tiêu của Khách hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .chart-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart-container"></div>
+    <script>
+        const margin = { top: 30, right: 150, bottom: 100, left: 150 };
+        const width = 1500 - margin.left - margin.right;
+        const height = 700 - margin.top - margin.bottom;
+        const binSize = 50000;
+        const maxSales = 4000000;
+        const numBins = Math.ceil(maxSales / binSize);
+        const bins = Array.from({ length: numBins }, (_, i) => ({
+            min: i * binSize,
+            max: (i + 1) * binSize,
+            count: 0
+        }));
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(data => {
+            
+            const customerSales = new Map();
+            
+            
+            data.forEach(d => {
+                const customerId = d["Mã khách hàng"];
+                const amount = parseFloat(d["Thành tiền"] || 0);
+                
+                if (!isNaN(amount)) {
+                    if (customerSales.has(customerId)) {
+                        customerSales.set(customerId, customerSales.get(customerId) + amount);
+                    } else {
+                        customerSales.set(customerId, amount);
+                    }
+                }
+            });
+            
+            const salesValues = Array.from(customerSales.values());
+
+            
+            salesValues.forEach(sales => {
+                if (sales > 0) {  
+                    const binIndex = Math.min(Math.floor(sales / binSize), numBins - 1);
+                    bins[binIndex].count++;
+                }
+            });
+
+            const svg = d3.select("#chart-container").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            
+            const filteredBins = bins.filter(bin => bin.count > 0);
+
+            const x = d3.scaleBand()
+                .domain(filteredBins.map((bin) => `${bin.min / 1000}K-${bin.max / 1000}K`))
+                .range([0, width])
+                .padding(0.1);
+
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(filteredBins, d => d.count)])
+                .nice()
+                .range([height, 0]);
+
+            svg.append("g")
+                .attr("transform", `translate(0,${height})`)
+                .call(d3.axisBottom(x))
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", ".15em")
+                .attr("transform", "rotate(-65)");
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+
+            svg.selectAll(".bar")
+                .data(filteredBins)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(`${d.min / 1000}K-${d.max / 1000}K`))
+                .attr("y", d => y(d.count))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.count))
+                .attr("fill", "steelblue");
+
+            svg.append("text")
+                .attr("x", width / 2)
+                .attr("y", -10)
+                .attr("text-anchor", "middle")
+                .attr("class", "chart-title")
+                .text("Phân phối Mức chi tiêu của Khách hàng");
+        });
+    </script>
+</body>
+</html>

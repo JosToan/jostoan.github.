@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Mặt hàng và Tháng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #main-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .chart-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="main-title">Xác suất bán hàng theo Mặt hàng và Tháng</h1>
+    <div id="charts-container"></div>
+    <script>
+        const margin = { top: 30, right: 250, bottom: 100, left: 150 };
+        const width = 1800 - margin.left - margin.right;
+        const height = 800 - margin.top - margin.bottom;
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(data => {
+            const groupedByNhomHang = d3.group(data, d => d["Mã nhóm hàng"] + " - " + d["Tên nhóm hàng"]);
+            const container = d3.select("#charts-container");
+            let row = null;
+            let chartCount = 0;
+
+            groupedByNhomHang.forEach((nhomHangData, nhomHang) => {
+                if (chartCount % 3 === 0) {
+                    row = container.append("div").style("display", "flex");
+                }
+
+                const chart = row.append("svg")
+                    .attr("width", 600)
+                    .attr("height", 350)
+                    .style("margin", "10px")
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const monthlyData = d3.group(nhomHangData, d => d3.timeMonth(new Date(d["Thời gian tạo đơn"])));
+                const processedData = [];
+
+                monthlyData.forEach((orders, month) => {
+                    const totalNhomHangOrders = new Set(orders.map(d => d["Mã đơn hàng"])).size;
+                    const groupedByMatHang = d3.group(orders, d => d["Mã mặt hàng"] + " - " + d["Tên mặt hàng"]);
+
+                    groupedByMatHang.forEach((matHangOrders, matHang) => {
+                        const matHangOrderCount = new Set(matHangOrders.map(d => d["Mã đơn hàng"])).size;
+                        processedData.push({
+                            month: d3.timeFormat("%b-%Y")(month),
+                            monthKey: `T${month.getMonth() + 1 < 10 ? '0' : ''}${month.getMonth() + 1}`,
+                            matHang: matHang,
+                            maMatHang: matHang.split(" - ")[0],
+                            xacSuat: (matHangOrderCount / totalNhomHangOrders * 100).toFixed(2)
+                        });
+                    });
+                });
+
+                const matHangNames = Array.from(new Set(processedData.map(d => d.matHang))).sort();
+
+                const x = d3.scalePoint()
+                    .domain(Array.from(new Set(processedData.map(d => d.monthKey))).sort())
+                    .range([0, 600 - margin.left - margin.right]);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(processedData, d => +d.xacSuat)])
+                    .nice()
+                    .range([350 - margin.top - margin.bottom, 0]);
+
+                const color = d3.scaleOrdinal(d3.schemeCategory10)
+                    .domain(matHangNames);
+
+                matHangNames.forEach(matHang => {
+                    const lineData = processedData.filter(d => d.matHang === matHang);
+                    const line = d3.line()
+                        .x(d => x(d.monthKey))
+                        .y(d => y(d.xacSuat));
+
+                    chart.append("path")
+                        .datum(lineData)
+                        .attr("fill", "none")
+                        .attr("stroke", color(matHang))
+                        .attr("stroke-width", 1.5)
+                        .attr("d", line);
+                });
+
+                chart.append("g")
+                    .attr("transform", `translate(0,${350 - margin.top - margin.bottom})`)
+                    .call(d3.axisBottom(x));
+
+                chart.append("g")
+                    .call(d3.axisLeft(y).tickFormat(d => `${d} %`));
+
+                const legend = chart.append("g")
+                    .attr("transform", `translate(${600 - margin.left - margin.right + 20}, 20)`);
+
+                processedData.map(d => d.maMatHang).filter((value, index, self) => self.indexOf(value) === index).forEach((maMatHang, i) => {
+                    const legendRow = legend.append("g")
+                        .attr("transform", `translate(0, ${i * 20})`);
+
+                    legendRow.append("rect")
+                        .attr("width", 20)
+                        .attr("height", 10)
+                        .attr("fill", color(maMatHang));
+
+                    legendRow.append("text")
+                        .attr("x", 25)
+                        .attr("y", 10)
+                        .attr("text-anchor", "start")
+                        .text(maMatHang);
+                });
+
+                chart.append("text")
+                    .attr("x", (600 - margin.left - margin.right) / 2)
+                    .attr("y", -10)
+                    .attr("text-anchor", "middle")
+                    .attr("class", "chart-title")
+                    .text(`${nhomHang}`);
+
+                chartCount++;
+            });
+        });
+    </script>
+</body>
+</html>

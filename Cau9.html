@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xác suất bán hàng theo Mặt hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        #main-title {
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .chart-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-anchor: middle;
+        }
+        .bar-label {
+            font-size: 14px;
+            text-anchor: end;
+            fill: black;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="main-title">Xác suất bán hàng theo Mặt hàng</h1>
+    <div id="charts-container"></div>
+    <svg width="1800" height="800"></svg>
+    <script>
+        const margin = { top: 30, right: 150, bottom: 100, left: 200 }; 
+        const width = 1800 - margin.left - margin.right;
+        const height = 800 - margin.top - margin.bottom; 
+
+        d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv").then(data => {
+            const groupedByNhomHang = d3.group(data, d => d["Mã nhóm hàng"] + " - " + d["Tên nhóm hàng"]);
+            const container = d3.select("#charts-container");
+            let row = null;
+            let chartCount = 0;
+
+            groupedByNhomHang.forEach((nhomHangData, nhomHang) => {
+                if (chartCount % 3 === 0) {
+                    row = container.append("div").style("display", "flex");
+                }
+
+                const chart = row.append("svg")
+                    .attr("width", 650)
+                    .attr("height", 450) 
+                    .style("margin", "10px")
+                    .append("g")
+                    .attr("transform", `translate(${margin.left},${margin.top})`);
+
+                const totalNhomHangOrders = new Set(nhomHangData.map(d => d["Mã đơn hàng"])).size;
+                const groupedByMatHang = d3.rollup(
+                    nhomHangData,
+                    v => new Set(v.map(d => d["Mã đơn hàng"])).size,
+                    d => d["Mã mặt hàng"] + " - " + d["Tên mặt hàng"]
+                );
+
+                const processedData = Array.from(groupedByMatHang, ([matHang, orderCount]) => ({
+                    matHang: matHang,
+                    xacSuat: (orderCount / totalNhomHangOrders * 100).toFixed(2)
+                })).sort((a, b) => b.xacSuat - a.xacSuat);
+
+                const y = d3.scaleBand()
+                    .domain(processedData.map(d => d.matHang))
+                    .range([0, 400]) 
+                    .padding(12)
+                    .paddingInner(0.2) 
+                    .paddingOuter(0); 
+
+                const x = d3.scaleLinear()
+                    .domain([0, d3.max(processedData, d => +d.xacSuat)])
+                    .nice()
+                    .range([0, 600 - margin.left - margin.right]);
+
+                const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+                chart.selectAll(".bar")
+                    .data(processedData)
+                    .enter().append("rect")
+                    .attr("class", "bar")
+                    .attr("y", d => y(d.matHang))
+                    .attr("x", 0)
+                    .attr("width", d => x(d.xacSuat))
+                    .attr("height", y.bandwidth())
+                    .attr("fill", (d, i) => color(i));
+
+                chart.selectAll(".bar-label")
+                    .data(processedData)
+                    .enter().append("text")
+                    .attr("class", "bar-label")
+                    .attr("x", d => x(d.xacSuat) + 5)
+                    .attr("y", d => y(d.matHang) + y.bandwidth() / 2)
+                    .attr("dy", "0.35em")
+                    .text(d => `${d.xacSuat} %`);
+                
+                chart.append("g")
+                    .call(d3.axisLeft(y))
+                    .selectAll("text")
+                    .style("font-size", "11px")
+                    .style("text-anchor", "end");
+
+                
+                chart.append("text").attr("x", (width / 3 - margin.left - margin.right) / 2).attr("y", -10).attr("text-anchor", "middle").attr("class", "chart-title").text(`${nhomHang}`);
+
+                chartCount++;
+            });
+        });
+    </script>
+</body>
+</html>

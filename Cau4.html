@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Ngày trong tuần</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .bar {
+            fill-opacity: 0.8;
+        }
+        .bar:hover {
+            fill-opacity: 1;
+        }
+        .axis-label {
+            font-size: 14px;
+        }
+        .legend {
+            font-size: 14px;
+        }
+        h2 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h2>Doanh số bán hàng theo Ngày trong tuần</h2>
+    <svg width="1500" height="700"></svg>
+    <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv";
+        
+        d3.csv(csvUrl).then(data => {
+            data.forEach(d => {
+                d.Thanh_tien = +d["Thành tiền"];
+                d.Ngay = d["Thời gian tạo đơn"].split(" ")[0];
+            });
+            
+            const aggregatedData = d3.rollup(data,
+                v => d3.sum(v, d => d.Thanh_tien),
+                d => d.Ngay
+            );
+            
+            const groupedByWeekday = new Map();
+            Array.from(aggregatedData, ([date, totalRevenue]) => {
+                const weekday = new Date(date).getDay();
+                if (!groupedByWeekday.has(weekday)) {
+                    groupedByWeekday.set(weekday, []);
+                }
+                groupedByWeekday.get(weekday).push(totalRevenue);
+            });
+            
+            const processedData = Array.from(groupedByWeekday, ([day, revenues]) => ({
+                ngayTrongTuan: ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"][day],
+                doanhSoTB: d3.mean(revenues)
+            })).sort((a, b) => ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"].indexOf(a.ngayTrongTuan) - ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ nhật"].indexOf(b.ngayTrongTuan));
+            
+            const margin = {top: 30, right: 150, bottom: 100, left: 150};
+            const width = 1500 - margin.left - margin.right;
+            const height = 700 - margin.top - margin.bottom;
+            
+            const svg = d3.select("svg")
+                .append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top})`);
+            
+            const x = d3.scaleBand()
+                .domain(processedData.map(d => d.ngayTrongTuan))
+                .range([0, width])
+                .padding(0.2);
+            
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.doanhSoTB)])
+                .range([height, 0]);
+            
+            const color = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(processedData.map(d => d.ngayTrongTuan));
+            
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", d => x(d.ngayTrongTuan))
+                .attr("y", d => y(d.doanhSoTB))
+                .attr("width", x.bandwidth())
+                .attr("height", d => height - y(d.doanhSoTB))
+                .attr("fill", d => color(d.ngayTrongTuan));
+            
+            svg.selectAll(".label")
+                .data(processedData)
+                .enter().append("text")
+                .attr("x", d => x(d.ngayTrongTuan) + x.bandwidth() / 2)
+                .attr("y", d => y(d.doanhSoTB) - 5)
+                .attr("text-anchor", "middle")
+                .text(d => `${d3.format(",.0f")(d.doanhSoTB)} VND`);
+            
+            svg.append("g")
+                .attr("class", "axis-label")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(x));
+            
+            svg.append("g")
+                .attr("class", "axis-label")
+                .call(d3.axisLeft(y).ticks(10, "~s"));
+        });
+    </script>
+</body>
+</html>

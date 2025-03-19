@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Doanh số bán hàng theo Nhóm hàng</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .bar {
+            fill-opacity: 0.8;
+        }
+        .bar:hover {
+            fill-opacity: 1;
+        }
+        .axis-label {
+            font-size: 12px;
+        }
+        .legend {
+            font-size: 12px;
+        }
+        h2 {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <h2>Doanh số bán hàng theo Nhóm hàng</h2>
+    <svg width="1500" height="700"></svg>
+    <script>
+        const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS5YkI613Xtm0-uSA6NozEkDAWm17X7G-iCh_tVPrEv48RNmwgqkRpdwFcJntWRcTQOoMv1y2T1bBwC/pub?gid=1701574632&single=true&output=csv";
+
+        d3.csv(csvUrl).then(data => {
+            data.forEach(d => {
+                d.Thanh_tien = +d["Thành tiền"] / 1e6; 
+            });
+
+            const aggregatedData = d3.rollup(data,
+                v => d3.sum(v, d => d.Thanh_tien),
+                d => `[${d["Mã nhóm hàng"]}] ${d["Tên nhóm hàng"]}`
+            );
+
+            const processedData = Array.from(aggregatedData, ([key, value]) => ({ nhomHang: key, doanhSo: value }))
+                .sort((a, b) => b.doanhSo - a.doanhSo); 
+
+            const margin = { top: 30, right: 150, bottom: 100, left: 250 }; 
+            const width = 1500 - margin.left - margin.right; 
+            const height = 700 - margin.top - margin.bottom;
+
+            const svg = d3.select("svg")
+                .append("g")
+                .attr("transform", `translate(${margin.left}, ${margin.top})`);
+
+            const x = d3.scaleLinear()
+                .domain([0, d3.max(processedData, d => d.doanhSo)])
+                .range([0, width*0.8]);
+
+            const y = d3.scaleBand()
+                .domain(processedData.map(d => d.nhomHang))
+                .range([0, height])
+                .padding(0.2);
+
+            const color = d3.scaleOrdinal(d3.schemeCategory10)
+                .domain(processedData.map(d => d.nhomHang));
+
+            svg.selectAll(".bar")
+                .data(processedData)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("y", d => y(d.nhomHang))
+                .attr("width", d => x(d.doanhSo))
+                .attr("height", y.bandwidth())
+                .attr("fill", d => color(d.nhomHang));
+
+            svg.selectAll(".label")
+                .data(processedData)
+                .enter().append("text")
+                .attr("x", d => x(d.doanhSo) + 5)
+                .attr("y", d => y(d.nhomHang) + y.bandwidth() / 2)
+                .attr("dy", "0.35em")
+                .text(d => `${d3.format(".0f")(d.doanhSo)} triệu VND`);
+
+            svg.append("g")
+                .attr("class", "axis-label")
+                .call(d3.axisLeft(y));
+
+            svg.append("g")
+                .attr("class", "axis-label")
+                .attr("transform", `translate(0, ${height})`)
+                .call(d3.axisBottom(x).ticks(10).tickFormat(d3.format("d"))); 
+
+        });
+    </script>
+</body>
+</html>
